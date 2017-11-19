@@ -226,6 +226,7 @@ NS_INLINE BOOL StringsMatchExceptLineBreaks(NSString *expected, NSString *actual
     if (!matchingButOccludedElement && self.window) {
         if ([self isKindOfClass:[UITableView class]]) {
             UITableView *tableView = (UITableView *)self;
+            __block NSIndexPath *firstIndexPath = nil;
             
             // Because of a bug in [UITableView indexPathsForVisibleRows] http://openradar.appspot.com/radar?id=5191284490764288
             // We use [UITableView visibleCells] to determine the index path of the visible cells
@@ -234,6 +235,13 @@ NS_INLINE BOOL StringsMatchExceptLineBreaks(NSString *expected, NSString *actual
                 NSIndexPath *indexPath = [tableView indexPathForCell:cell];
                 if (indexPath) {
                     [indexPathsForVisibleRows addObject:indexPath];
+                }
+                if (firstIndexPath == nil) {
+                    firstIndexPath = indexPath;
+                } else {
+                    if ([firstIndexPath compare:indexPath] == NSOrderedDescending) {
+                        firstIndexPath = indexPath;
+                    }
                 }
             }];
             
@@ -250,29 +258,27 @@ NS_INLINE BOOL StringsMatchExceptLineBreaks(NSString *expected, NSString *actual
                     }
                     
                     @autoreleasepool {
-                        // Get the cell directly from the dataSource because UITableView will only vend visible cells
-                        UITableViewCell *cell = [tableView.dataSource tableView:tableView cellForRowAtIndexPath:indexPath];
+                        // Scroll to the cell
+                        [tableView scrollToRowAtIndexPath:indexPath atScrollPosition:UITableViewScrollPositionNone animated:NO];
                         
+                        UITableViewCell *cell = [tableView cellForRowAtIndexPath:indexPath];
                         UIAccessibilityElement *element = [cell accessibilityElementMatchingBlock:matchBlock notHidden:NO];
-                        
-                        // Remove the cell from the table view so that it doesn't stick around
-                        [cell removeFromSuperview];
                         
                         // Skip this cell if it isn't the one we're looking for
                         if (!element) {
                             continue;
                         }
                     }
-                    
-                    // Scroll to the cell and wait for the animation to complete
-                    [tableView scrollToRowAtIndexPath:indexPath atScrollPosition:UITableViewScrollPositionNone animated:YES];
-                    // Note: using KIFRunLoopRunInModeRelativeToAnimationSpeed here may cause tests to stall
-                    CFRunLoopRunInMode(UIApplicationCurrentRunMode, 0.5, false);
-                    
                     // Now try finding the element again
+                    NSLog(@"Found at indexPath: %@", indexPath);
+                    CFRunLoopRunInMode(UIApplicationCurrentRunMode, 0, false);
                     return [self accessibilityElementMatchingBlock:matchBlock];
                 }
             }
+            if (firstIndexPath) {
+                [tableView scrollToRowAtIndexPath:firstIndexPath atScrollPosition:UITableViewScrollPositionTop animated:NO];
+            }
+            CFRunLoopRunInMode(UIApplicationCurrentRunMode, 0, false);
         } else if ([self isKindOfClass:[UICollectionView class]]) {
             UICollectionView *collectionView = (UICollectionView *)self;
             
